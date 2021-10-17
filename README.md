@@ -1,4 +1,4 @@
-# i-love-music
+# I &#9825; Music
 
 I &#9825; Music is an MP3 player and organizer. It is designed for handling collections of albums in MP3 format, 
 and it is very visual, attempting to capture some aspects of the physical feel of an album collection. I &#9825; Music
