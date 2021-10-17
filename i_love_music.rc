@@ -1,0 +1,33 @@
+1 ICON i_love_music.ico
+
+#define VER_MAJOR 1
+#define VER_MINOR 1
+#define VER_REVISION 0
+
+#define MACRO_TO_STR(x) #x
+#define TO_STR(x) MACRO_TO_STR(x)
+#define VER_STRING TO_STR(VER_MAJOR) "." TO_STR(VER_MINOR) "." TO_STR(VER_REVISION)
+
+1 VERSIONINFO
+FILEVERSION     VER_MAJOR,VER_MINOR,VER_REVISION
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName", "Mattias Gustavsson"
+            VALUE "FileDescription", "MP3 Player/Organizer by Mattias Gustavsson"
+            VALUE "FileVersion", VER_STRING
+            VALUE "InternalName", "i_love_music"
+            VALUE "LegalCopyright", "This software is public domain."
+            VALUE "OriginalFilename", "i_love_music.exe"
+            VALUE "ProductName",      "I Love Music"
+            VALUE "ProductVersion", VER_STRING
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
