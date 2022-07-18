@@ -6,6 +6,8 @@ doesn't handle loose MP3's very well, and it doesn't do queueing of songs, or pl
 it like a digital record collection. It excels at browsing and listening to albums, and it is designed to be fast and
 responsive even with large collections of albums.
 
+![Genre selection screen](docs/img/genres.png "Genre selection screen")
+
 I built the application because I couldn't find one which worked the way I wanted it to. I also wanted one which is
 easy to maintain and update to keep working year after year, so it is written in Ansi C, with as few dependencies as 
 possible (and none of them external to the source code). The source code is being made available for free use 
