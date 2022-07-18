@@ -13,11 +13,13 @@ responsive even with large collections of albums.
 
 I built the application because I couldn't find one which worked the way I wanted it to. I also wanted one which is
 easy to maintain and update to keep working year after year, so it is written in Ansi C, with as few dependencies as 
-possible (and none of them external to the source code). The source code is being made available for free use 
-(public domain), so even if I would stop supporting it at some point in the future, it would be possible for others 
-to fix any future issues that would arise.
+possible (and none of them external to the source code). 
 
 ![Artist screen](docs/img/heavyd.png "Artist screen")
+
+The source code is being made available for free use 
+(public domain), so even if I would stop supporting it at some point in the future, it would be possible for others 
+to fix any future issues that would arise.
 
 ## Download
 
