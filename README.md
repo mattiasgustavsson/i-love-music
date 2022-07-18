@@ -14,6 +14,8 @@ possible (and none of them external to the source code). The source code is bein
 (public domain), so even if I would stop supporting it at some point in the future, it would be possible for others 
 to fix any future issues that would arise.
 
+![Artist screen](docs/img/heavyd.png "Artist screen")
+
 ## Download
 
 To download a pre-built binary, bundled with some MP3s so you can try it out before populating it with your own tracks,
