@@ -1,8 +1,11 @@
 # I &#9825; Music
 
 I &#9825; Music is an MP3 player and organizer. It is designed for handling collections of albums in MP3 format, 
-and it is very visual, attempting to capture some aspects of the physical feel of an album collection. I &#9825; Music
-doesn't handle loose MP3's very well, and it doesn't do queueing of songs, or playlists and things like that. Think of 
+and it is very visual, attempting to capture some aspects of the physical feel of an album collection.
+
+![Tracks screen](docs/img/kesha.png "Tracks screen")
+
+I &#9825; Music doesn't handle loose MP3's very well, and it doesn't do queueing of songs, or playlists and things like that. Think of 
 it like a digital record collection. It excels at browsing and listening to albums, and it is designed to be fast and
 responsive even with large collections of albums.
 
