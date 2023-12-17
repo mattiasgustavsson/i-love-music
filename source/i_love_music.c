@@ -131,9 +131,11 @@ void sleep( int ms )
 
 int random( int min, int max ) {
     static bool initialized = false;
-    rnd_pcg_t pcg;
-    if( !initialized ) 
+    static rnd_pcg_t pcg;
+    if( !initialized ) {
         rnd_pcg_seed( &pcg, (RND_U32) time( NULL) );
+        initialized = true;
+    }
     return rnd_pcg_range( &pcg, min, max );
 }
 
@@ -177,6 +179,8 @@ void change_current_task( char const* str )
         printf( "%s\n", current );
         }
     }
+
+bool g_shuffle_list_loaded = false;
 
 #pragma warning( disable: 4702 )
 #pragma warning( disable: 4706 )
@@ -227,7 +231,7 @@ typedef enum screen_t
     SCREEN_ARTISTS,
     SCREEN_ALBUMS,
     SCREEN_TRACKS,
-    SCREEN_MIXTAPES,
+    SCREEN_SHUFFLE,
     SCREEN_SETTINGS,
     } screen_t;
 
@@ -235,6 +239,7 @@ typedef enum screen_t
 #include "screen_artists.h"
 #include "screen_albums.h"
 #include "screen_tracks.h"
+#include "screen_shuffle.h"
 #include "screen_settings.h"
 
 #include "tabs_bar.h"
@@ -268,6 +273,7 @@ typedef struct last_state_t {
     uint32_t artists_genre_thumb;
     uint32_t albums_genre_id;
     uint32_t albums_artist_id;
+    int shuffle_list_index;
 } last_state_t;
 
 
@@ -293,6 +299,7 @@ void load_last_state( last_state_t* state ) {
     state->artists_genre_thumb = MUSICDB_INVALID_ID;
     state->albums_genre_id = MUSICDB_INVALID_ID;
     state->albums_artist_id = MUSICDB_INVALID_ID;
+    state->shuffle_list_index = 0;
     file_t* ini_file = file_load( ".cache\\last_state.ini", FILE_MODE_TEXT, NULL );
     if( ini_file ) {
         ini_t* ini = ini_load( ini_file->data, NULL );
@@ -385,6 +392,10 @@ void load_last_state( last_state_t* state ) {
             char const* albums_artist_id = ini_property_value( ini, INI_GLOBAL_SECTION, 
                 ini_find_property( ini, INI_GLOBAL_SECTION, "albums_artist_id", 0 ) );
             state->albums_artist_id = albums_artist_id ? (uint32_t)(int)atoll( albums_artist_id ) : state->albums_artist_id;
+
+            char const* shuffle_list_index = ini_property_value( ini, INI_GLOBAL_SECTION, 
+                ini_find_property( ini, INI_GLOBAL_SECTION, "shuffle_list_index", 0 ) );
+            state->shuffle_list_index = shuffle_list_index ? (int)atoi( shuffle_list_index ) : state->shuffle_list_index;
 
             ini_destroy( ini );
         }
@@ -497,7 +508,7 @@ int app_proc( app_t* app, void* user_data )
 
     printf( "play thread\n" );
     play_thread_t* play = play_thread_create();
-    play_control_t control;
+    static play_control_t control;
     play_control_init( &control, play );
     control.repeat = last_state.repeat;
     control.shuffle = last_state.shuffle;
@@ -506,7 +517,7 @@ int app_proc( app_t* app, void* user_data )
         {
         int songs_count = 0;
         musicdb_song_t* songs = musicdb_songs_get( &musicdb, last_state.album, &songs_count, NULL, NULL );   
-        if( songs )
+        if( songs && songs_count )
             {
             control.play_thread->ignore_resume = true;
             play_control_pause( &control );
@@ -521,7 +532,7 @@ int app_proc( app_t* app, void* user_data )
 
     printf( "tabs bar\n" );
     tabs_bar_t* tabs_bar = tabs_bar_create( &render, &control, slider_bitmaps );
-    if( last_state.tab >= 0 && last_state.tab <= 3 )
+    if( last_state.tab >= 0 && last_state.tab <= 4 )
         tabs_bar->active_tab_index = last_state.tab + 1;
     else
         tabs_bar->active_tab_index = 1;
@@ -560,16 +571,23 @@ int app_proc( app_t* app, void* user_data )
     screen_tracks_t screen_tracks;
     screen_tracks_init( &screen_tracks, app, &render, &control, frame, slider_bitmaps );
 
+    printf( "screen shuffle\n" );
+    screen_shuffle_t screen_shuffle;
+    screen_shuffle_init( &screen_shuffle, app, &render );
+    screen_shuffle.track_index = last_state.shuffle_list_index;
+
     printf( "almost done\n" );
-    screen_t screen = last_state.tab >= 0 && last_state.tab <= SCREEN_TRACKS ? (screen_t) last_state.tab : SCREEN_GENRES;
+    screen_t screen = last_state.tab >= 0 && last_state.tab <= SCREEN_SHUFFLE ? (screen_t) last_state.tab : SCREEN_GENRES;
     screen_t prev_screen = SCREEN_SETTINGS;
-    
+
     if( g_noscan == false ) 
         {
         char const* paths[] = { ".", global_music_path };
         musicdb_build( &musicdb, paths, *global_music_path ? 2 : 1 );
         }
 
+    musicdb_load_shuffle_list( &musicdb );
+    
     time_t last_refresh = 0;
     time( &last_refresh );
     bool first_time_refresh = true;
@@ -860,13 +878,13 @@ int app_proc( app_t* app, void* user_data )
                         new_screen = screen - 1;
                         if( new_screen < 0 ) 
                             {
-                            new_screen = SCREEN_TRACKS;
+                            new_screen = SCREEN_SHUFFLE;
                             }
                         }
                     else 
                         {
                         new_screen = screen + 1;
-                        if( new_screen > SCREEN_TRACKS ) 
+                        if( new_screen > SCREEN_SHUFFLE ) 
                             {
                             new_screen = SCREEN_GENRES;
                             }
@@ -888,6 +906,10 @@ int app_proc( app_t* app, void* user_data )
                 if( appinput.events[ i ].data.key == APP_KEY_F4 )
                     {
                     new_screen = SCREEN_TRACKS;
+                    }
+                if( appinput.events[ i ].data.key == APP_KEY_F5 )
+                    {
+                    new_screen = SCREEN_SHUFFLE;
                     }
 
                 if( screen != new_screen )
@@ -928,6 +950,15 @@ int app_proc( app_t* app, void* user_data )
                         redraw = true;
                         resize = true;
                         }
+                    else if( new_screen == SCREEN_SHUFFLE )
+                        {
+                        tabs_bar->active_tab_index = 5;
+                        screen = SCREEN_SHUFFLE;
+                        screen_shuffle_refresh( &screen_shuffle, &musicdb );
+                        last_refresh = now;
+                        redraw = true;
+                        resize = true;
+                        }
                     }
                 if( appinput.events[ i ].data.key == APP_KEY_F11 )
                     {
@@ -940,6 +971,12 @@ int app_proc( app_t* app, void* user_data )
                     redraw = true;
                     }
                 }
+            }
+        
+        if( g_shuffle_list_loaded ) 
+            {
+            g_shuffle_list_loaded = false;
+            screen_shuffle_refresh( &screen_shuffle, &musicdb );
             }
 
         if( lbutton && lbutton_released ) 
@@ -969,7 +1006,9 @@ int app_proc( app_t* app, void* user_data )
         tabs_bar_navigation_t tabs_nav;
         tabs_nav.screen = screen;
         redraw |= tabs_bar_update( tabs_bar, &tabs_nav, appinput, &input, resize, 
-            screen == SCREEN_TRACKS && screen_tracks.album_id == control.album_id, screen == SCREEN_TRACKS && screen_tracks.big_pic );
+            screen == SCREEN_TRACKS ? screen_tracks.album_id : MUSICDB_INVALID_ID, 
+            screen == SCREEN_ARTISTS ? screen_artists.current_genre_id : MUSICDB_INVALID_ID,
+            screen == SCREEN_TRACKS && screen_tracks.big_pic, &musicdb );
         if( tabs_nav.hide ) 
             {
             hide_window( app );
@@ -1012,10 +1051,12 @@ int app_proc( app_t* app, void* user_data )
                 redraw = true;
                 resize = true;
                 }
-            if( screen == SCREEN_MIXTAPES )
+            if( screen == SCREEN_SHUFFLE )
                 {
+                screen_shuffle_refresh( &screen_shuffle, &musicdb );
                 tabs_bar->active_tab_index = 5;
                 redraw = true;
+                resize = true;
                 }
             if( screen == SCREEN_SETTINGS )
                 {
@@ -1159,9 +1200,24 @@ int app_proc( app_t* app, void* user_data )
                 resize = true;
                 }
             }
-        else if( screen == SCREEN_MIXTAPES )
+        else if( screen == SCREEN_SHUFFLE )
             {
+            screen_shuffle_navigation_t navigation;
+            redraw |= screen_shuffle_update( &screen_shuffle, &navigation, resize, &input, &musicdb, &control );
+            screen = navigation.screen;
+            if( screen == SCREEN_TRACKS )
+                {
+                tabs_bar->active_tab_index = 4;
+                screen_tracks_set_album( &screen_tracks, navigation.selected_album_id );
+                screen_tracks_refresh( &screen_tracks, &musicdb );
 
+                input_t mouse_only = { input.mouse_x, input.mouse_y };
+                screen_tracks_navigation_t nav;
+                screen_tracks_update( &screen_tracks, &nav, true, &mouse_only );
+                last_refresh = now;
+                redraw = true;
+                resize = true;
+                }
             }
         else if( screen == SCREEN_SETTINGS )
             {
@@ -1185,8 +1241,8 @@ int app_proc( app_t* app, void* user_data )
                 screen_albums_refresh( &screen_albums, &musicdb, remap_genres );
             else if( screen == SCREEN_TRACKS )
                 screen_tracks_refresh( &screen_tracks, &musicdb );
-            else if( screen == SCREEN_MIXTAPES )
-                { }                    
+            else if( screen == SCREEN_SHUFFLE )
+                screen_shuffle_refresh( &screen_shuffle, &musicdb );
             else if( screen == SCREEN_SETTINGS )
                 { }
             resize = true;
@@ -1223,8 +1279,11 @@ int app_proc( app_t* app, void* user_data )
                         screen_tracks_navigation_t navigation;
                         screen_tracks_update( &screen_tracks, &navigation, true, &inp );
                         }
-                    else if( screen == SCREEN_MIXTAPES )
-                        { }
+                    else if( screen == SCREEN_SHUFFLE )
+                        { 
+                        screen_shuffle_navigation_t navigation;
+                        screen_shuffle_update( &screen_shuffle, &navigation, true, &inp, &musicdb, &control );
+                        }
                     else if( screen == SCREEN_SETTINGS )
                         {
                         screen_settings_navigation_t navigation;
@@ -1243,8 +1302,8 @@ int app_proc( app_t* app, void* user_data )
                     redraw |= screen_albums_draw( &screen_albums, &musicdb, remap_genres );
                 else if( screen == SCREEN_TRACKS )
                     redraw |= screen_tracks_draw( &screen_tracks );
-                else if( screen == SCREEN_MIXTAPES )
-                    { }
+                else if( screen == SCREEN_SHUFFLE )
+                    redraw |= screen_shuffle_draw( &screen_shuffle, &musicdb, &control );
                 else if( screen == SCREEN_SETTINGS )
                     redraw |= screen_settings_draw( &screen_settings );
                 }
@@ -1304,6 +1363,7 @@ int app_proc( app_t* app, void* user_data )
     fprintf( fp, "artists_genre_thumb=%u\n", screen_artists.current_genre_thumb );
     fprintf( fp, "albums_genre_id=%u\n", screen_albums.current_genre_id );
     fprintf( fp, "albums_artist_id=%u\n", screen_albums.current_artist_id );
+    fprintf( fp, "shuffle_list_index=%u\n", screen_shuffle.track_index );
     fclose( fp );
 
     hide_window( app );

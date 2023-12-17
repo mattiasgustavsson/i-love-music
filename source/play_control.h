@@ -5,8 +5,8 @@ typedef struct play_control_t
 
     uint32_t album_id;
 
-    musicdb_song_t tracks[ 256 ];
-    int tracks_shuffle[ 256 ];
+    musicdb_song_t tracks[ 256 * 1024 ];
+    int tracks_shuffle[ 256 * 1024 ];
     int tracks_count;
     int track_index;
 
@@ -31,7 +31,7 @@ void play_control_init( play_control_t* control, play_thread_t* play_thread )
 
 bool play_control_update( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return false;
+    if( control->tracks_count == 0 ) return false;
     if( play_thread_song_finished( control->play_thread ) )
         {
         if( control->loop ) return true;
@@ -39,7 +39,7 @@ bool play_control_update( play_control_t* control )
         if( control->track_index >= control->tracks_count ) 
             {
             control->track_index = 0;
-            if( !control->repeat ) 
+            if( !( control->repeat || control->album_id == MUSICDB_INVALID_ID ) ) 
                 {   
                 char const* filename = control->shuffle ? control->tracks[ control->tracks_shuffle[ control->track_index ] ].filename : control->tracks[ control->track_index ].filename;
                 play_control_pause( control );
@@ -64,7 +64,7 @@ bool play_control_update( play_control_t* control )
         int next_index = control->track_index + 1;
         if( next_index >= control->tracks_count ) next_index = 0;   
         char const* filename = control->shuffle ? control->tracks[ control->tracks_shuffle[ next_index ] ].filename : control->tracks[ next_index ].filename;
-        play_thread_queue_song( control->play_thread, control->repeat || next_index != 0 ? filename : "" );
+        play_thread_queue_song( control->play_thread, ( control->repeat || control->album_id == MUSICDB_INVALID_ID ) || next_index != 0 ? filename : "" );
         return true;
         }
 
@@ -151,7 +151,7 @@ void play_control_album( play_control_t* control, uint32_t album_id, musicdb_son
 
 void play_control_track( play_control_t* control, int track_index )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     if( track_index < 0 || track_index >= control->tracks_count ) return;
 
     if( control->shuffle )
@@ -188,9 +188,37 @@ void play_control_track( play_control_t* control, int track_index )
     }
 
 
+void play_control_shuffle_list( play_control_t* control, musicdb_song_t* tracks, int tracks_count ) 
+{
+    control->album_id = MUSICDB_INVALID_ID;
+
+    for( int i = 0; i < tracks_count; ++i ) 
+        { 
+        control->tracks[ i ] = tracks[ i ];
+        }
+    control->tracks_count = tracks_count;
+    control->track_index = 0;
+
+    for( int i = 0; i < control->tracks_count; ++i ) 
+        { 
+        control->tracks_shuffle[ i ] = i;
+        }
+   
+    int next_index = control->track_index + 1;
+    if( next_index >= control->tracks_count ) next_index = 0;
+
+    char const* filename = control->track_index < control->tracks_count ? ( control->shuffle ? control->tracks[ control->tracks_shuffle[ control->track_index ] ].filename : control->tracks[ control->track_index ].filename ): NULL;
+    char const* filename_next = next_index < control->tracks_count ? ( control->shuffle ? control->tracks[ control->tracks_shuffle[ next_index ] ].filename : control->tracks[ next_index ].filename ) : NULL;
+
+    play_thread_change_song( control->play_thread, filename, filename_next, 0.0f );
+    control->is_paused = false;
+}
+
+
+
 void play_control_pause( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     play_thread_pause( control->play_thread, true );
     control->is_paused = true;
     }
@@ -198,7 +226,7 @@ void play_control_pause( play_control_t* control )
 
 void play_control_stop( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     play_thread_set_position( control->play_thread, 0.0f );
     play_thread_pause( control->play_thread, true );
     control->is_paused = true;
@@ -207,7 +235,7 @@ void play_control_stop( play_control_t* control )
 
 void play_control_ffwd( play_control_t* control, bool is_ffwd )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     play_thread_ffwd( control->play_thread, is_ffwd );
     control->is_ffwd = is_ffwd;
     }
@@ -215,7 +243,7 @@ void play_control_ffwd( play_control_t* control, bool is_ffwd )
 
 void play_control_rewind( play_control_t* control, bool is_rewind )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     play_thread_rewind( control->play_thread, is_rewind );
     control->is_rewind = is_rewind;
     }
@@ -223,7 +251,7 @@ void play_control_rewind( play_control_t* control, bool is_rewind )
 
 void play_control_play( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     if( control->is_paused )
         {
         play_thread_pause( control->play_thread, false );
@@ -232,7 +260,7 @@ void play_control_play( play_control_t* control )
     else
         {
         int next_index = control->track_index + 1;
-        if( next_index >= control->tracks_count && control->repeat ) next_index = 0;
+        if( next_index >= control->tracks_count && ( control->repeat || control->album_id == MUSICDB_INVALID_ID ) ) next_index = 0;
 
         char const* filename = control->track_index < control->tracks_count ? ( control->shuffle ? control->tracks[ control->tracks_shuffle[ control->track_index ] ].filename : control->tracks[ control->track_index ].filename ): NULL;
         char const* filename_next = next_index < control->tracks_count ? ( control->shuffle ? control->tracks[ control->tracks_shuffle[ next_index ] ].filename : control->tracks[ next_index ].filename ) : NULL;
@@ -244,7 +272,7 @@ void play_control_play( play_control_t* control )
 
 void play_control_next( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     if( control->tracks_count == 0 ) return;
 
     control->track_index++;
@@ -265,7 +293,7 @@ void play_control_next( play_control_t* control )
 
 void play_control_prev( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     if( control->tracks_count == 0 ) return;
 
     control->track_index--;
@@ -292,7 +320,7 @@ int play_control_track_index( play_control_t* control )
 float play_control_length( play_control_t* control )
     {
     if( control->play_thread->is_decoding ) return 0;
-    if( control->album_id == MUSICDB_INVALID_ID ) return 0;
+    if( control->tracks_count == 0 ) return 0;
     int track_index = control->track_index;
     if( track_index < 0 || track_index >= control->tracks_count ) return 0;
     return play_thread_get_length( control->play_thread );
@@ -301,7 +329,7 @@ float play_control_length( play_control_t* control )
 
 float play_control_position( play_control_t* control )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return 0;
+    if( control->tracks_count == 0 ) return 0;
     int track_index = control->track_index;
     if( track_index < 0 || track_index >= control->tracks_count ) return 0;
     return play_thread_get_position( control->play_thread );
@@ -310,7 +338,7 @@ float play_control_position( play_control_t* control )
 
 void play_control_position_set( play_control_t* control, float position )
     {
-    if( control->album_id == MUSICDB_INVALID_ID ) return;
+    if( control->tracks_count == 0 ) return;
     int track_index = control->track_index;
     if( track_index < 0 || track_index >= control->tracks_count ) return;
     play_thread_set_position( control->play_thread, position );

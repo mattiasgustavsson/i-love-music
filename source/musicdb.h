@@ -2,13 +2,14 @@
     #define MUSICDB_THUMBNAIL_FILES
 #endif 
 
-static int MUSICDB_VERSION = 1;
+static int MUSICDB_VERSION = 2;
 
 #define MUSICDB_HEADER_ID_SIZE 32
 static char const musicdb_genres_header_id[ MUSICDB_HEADER_ID_SIZE ] =  "ilm_db_genres";
 static char const musicdb_artists_header_id[ MUSICDB_HEADER_ID_SIZE ] = "ilm_db_artists";
 static char const musicdb_albums_header_id[ MUSICDB_HEADER_ID_SIZE ] =  "ilm_db_albums";
 static char const musicdb_songs_header_id[ MUSICDB_HEADER_ID_SIZE ] =   "ilm_db_songs";
+static char const musicdb_shuffle_header_id[ MUSICDB_HEADER_ID_SIZE ] = "ilm_db_shuffle";
 static char const musicdb_mixtapes_header_id[ MUSICDB_HEADER_ID_SIZE ] = "ilm_db_mixtapes";
 static char const musicdb_thumbnails_header_id[ MUSICDB_HEADER_ID_SIZE ] = "ilm_db_thumbnails";
 #ifndef MUSICDB_THUMBNAIL_FILES
@@ -126,6 +127,15 @@ typedef struct musicdb_songs_t
     } musicdb_songs_t;
 
 
+// shuffle.db
+
+typedef struct musicdb_shuffle_t
+    {
+    musicdb_header_t header;
+    int items[ 1 ]; // "open" array of indices into musicdb_songs_t
+    } musicdb_shuffle_t;
+
+
 // mixtapes.db
 
 typedef struct musicdb_mixtape_t
@@ -197,6 +207,7 @@ typedef struct music_db_t
     musicdb_artists_t* artists;
     musicdb_albums_t* albums;
     musicdb_songs_t* songs;
+    musicdb_shuffle_t* shuffle;
     musicdb_mixtapes_t* mixtapes;
     musicdb_thumbnails_t* thumbnails;
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -207,6 +218,7 @@ typedef struct music_db_t
     mmap_t* mmap_artists;
     mmap_t* mmap_albums;
     mmap_t* mmap_songs;
+    mmap_t* mmap_shuffle;
     mmap_t* mmap_mixtapes;
     mmap_t* mmap_thumbnails;
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -360,6 +372,7 @@ void musicdb_close( music_db_t* db )
     #endif
     if( db->mmap_thumbnails ) mmap_close( db->mmap_thumbnails );
     if( db->mmap_mixtapes ) mmap_close( db->mmap_mixtapes );
+    if( db->mmap_shuffle ) mmap_close( db->mmap_shuffle );
     if( db->mmap_songs ) mmap_close( db->mmap_songs );
     if( db->mmap_albums ) mmap_close( db->mmap_albums );
     if( db->mmap_artists ) mmap_close( db->mmap_artists );
@@ -385,6 +398,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     char artists_filename[ 256 ] = "";
     char albums_filename[ 256 ] = "";
     char songs_filename[ 256 ] = "";
+    char shuffle_filename[ 256 ] = "";
     char mixtapes_filename[ 256 ] = "";
     char thumbnails_filename[ 256 ] = "";
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -395,6 +409,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     strcpy( artists_filename, path );
     strcpy( albums_filename, path );
     strcpy( songs_filename, path );
+    strcpy( shuffle_filename, path );
     strcpy( mixtapes_filename, path );
     strcpy( thumbnails_filename, path );
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -407,6 +422,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
         strcat( artists_filename, "\\" );
         strcat( albums_filename, "\\" );
         strcat( songs_filename, "\\" );
+        strcat( shuffle_filename, "\\" );
         strcat( mixtapes_filename, "\\" );
         strcat( thumbnails_filename, "\\" );
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -418,6 +434,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     strcat( artists_filename, "artists.db" );
     strcat( albums_filename, "albums.db" );
     strcat( songs_filename, "songs.db" );
+    strcat( shuffle_filename, "shuffle.db" );
     strcat( mixtapes_filename, "mixtapes.db" );
     strcat( thumbnails_filename, "thumbnails.db" );
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -429,6 +446,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     if( !file_exists( artists_filename ) ) regenerate_db = true;
     if( !file_exists( albums_filename ) ) regenerate_db = true;
     if( !file_exists( songs_filename ) ) regenerate_db = true;
+    if( !file_exists( shuffle_filename ) ) regenerate_db = true;
     if( !file_exists( mixtapes_filename ) ) regenerate_db = true;
     if( !file_exists( thumbnails_filename ) ) regenerate_db = true;
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -441,6 +459,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
         db->mmap_artists = musicdb_internal_mmap_create( artists_filename, musicdb_artists_header_id, sizeof( musicdb_artist_t ), 1024 );
         db->mmap_albums = musicdb_internal_mmap_create( albums_filename, musicdb_albums_header_id, sizeof( musicdb_album_t ), 4096 );
         db->mmap_songs = musicdb_internal_mmap_create( songs_filename, musicdb_songs_header_id, sizeof( musicdb_song_t ), 16384 );
+        db->mmap_shuffle = musicdb_internal_mmap_create( shuffle_filename, musicdb_shuffle_header_id, sizeof( int ), 8192 );
         db->mmap_mixtapes = musicdb_internal_mmap_create( mixtapes_filename, musicdb_mixtapes_header_id, sizeof( musicdb_mixtape_t ), 2048 );
         db->mmap_thumbnails = musicdb_internal_mmap_create( thumbnails_filename, musicdb_thumbnails_header_id, sizeof( musicdb_thumbnail_t ), 4096 );
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -454,6 +473,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
         db->mmap_artists = musicdb_internal_mmap_open( artists_filename, musicdb_artists_header_id );
         db->mmap_albums = musicdb_internal_mmap_open( albums_filename, musicdb_albums_header_id );
         db->mmap_songs = musicdb_internal_mmap_open( songs_filename, musicdb_songs_header_id );
+        db->mmap_shuffle = musicdb_internal_mmap_open( shuffle_filename, musicdb_shuffle_header_id );
         db->mmap_mixtapes = musicdb_internal_mmap_open( mixtapes_filename, musicdb_mixtapes_header_id );
         db->mmap_thumbnails = musicdb_internal_mmap_open( thumbnails_filename, musicdb_thumbnails_header_id );
     #ifndef MUSICDB_THUMBNAIL_FILES
@@ -461,7 +481,7 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     #endif
         }
 
-    if( !db->mmap_genres || !db->mmap_artists || !db->mmap_albums || !db->mmap_songs || !db->mmap_mixtapes || !db->mmap_thumbnails 
+    if( !db->mmap_genres || !db->mmap_artists || !db->mmap_albums || !db->mmap_songs || !db->mmap_shuffle || !db->mmap_mixtapes || !db->mmap_thumbnails 
     #ifndef MUSICDB_THUMBNAIL_FILES
         || !db->mmap_pixels 
     #endif
@@ -475,13 +495,14 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
     db->artists = (musicdb_artists_t*) mmap_data( db->mmap_artists );
     db->albums = (musicdb_albums_t*) mmap_data( db->mmap_albums );
     db->songs = (musicdb_songs_t*) mmap_data( db->mmap_songs );
+    db->shuffle = (musicdb_shuffle_t*) mmap_data( db->mmap_shuffle );
     db->mixtapes = (musicdb_mixtapes_t*) mmap_data( db->mmap_mixtapes );
     db->thumbnails = (musicdb_thumbnails_t*) mmap_data( db->mmap_thumbnails );
     #ifndef MUSICDB_THUMBNAIL_FILES
     db->pixels = (musicdb_pixels_t*) mmap_data( db->mmap_pixels );
     #endif
 
-    if( !db->genres || !db->artists || !db->albums || !db->songs || !db->mixtapes || !db->thumbnails 
+    if( !db->genres || !db->artists || !db->albums || !db->songs || !db->shuffle || !db->mixtapes || !db->thumbnails 
     #ifndef MUSICDB_THUMBNAIL_FILES
         || !db->pixels 
     #endif
@@ -497,6 +518,29 @@ bool musicdb_open( music_db_t* db, background_tasks_t* background_tasks, char co
 #ifndef MUSICDB_THUMBNAIL_FILES
     preload_pixel_cache( db, pixels_filename );
 #endif
+
+    /*
+    db->shuffle->header.count = 20;
+    srand(11);
+    for( int i = 0; i < db->shuffle->header.count; ++i ) {
+        bool found = false;
+        int index = rand() % db->songs->header.count;
+        do {
+        bool found = false;
+        for( int j = 0; j < i; ++j ) {
+            if( index == db->shuffle->items[ j ] ) {
+                found = true;
+                break;
+            }
+        }
+        if( found ) {
+            index = rand() % db->songs->header.count;
+        }
+        } while( found );
+        db->shuffle->items[ i ] = index;
+    }
+    */
+
     return true;
     }
 
@@ -506,6 +550,21 @@ uint64_t musicdb_change_counter( music_db_t* db )
     uint64_t value = db->change_counter;
     thread_mutex_unlock( &db->mutex );
     return value;
+    }
+
+
+bool musicdb_internal_ensure_shuffle_capacity( music_db_t* db )
+    {
+    if( db->shuffle->header.count >= db->shuffle->header.capacity )
+        {
+        db->mmap_shuffle = musicdb_internal_mmap_resize( db->mmap_shuffle, 
+            sizeof( int ), db->shuffle->header.capacity * 2 );
+        if( !db->mmap_shuffle ) return false;
+        db->shuffle = (musicdb_shuffle_t*) mmap_data( db->mmap_shuffle );
+        if( !db->shuffle ) return false;
+        }
+
+    return true;
     }
 
 
@@ -892,7 +951,7 @@ static uint32_t musicdb_internal_add_album( music_db_t* db, char const* album_ti
 static uint32_t musicdb_internal_add_artist( music_db_t* db, char const* artist_name, char const* sort_name );
 static uint32_t musicdb_internal_add_genre( music_db_t* db, char const* genre_label );
 
-
+int const TASK_PRIORITY_WRITE_SHUFFLE_LIST = 150;
 int const TASK_PRIORITY_CHECK_THUMBNAILS_AT_START = 140;
 int const TASK_PRIORITY_GENERATE_THUMBNAIL_GENRE = 130;
 int const TASK_PRIORITY_FORCED_ADD_ALBUMS_ARTISTS = 120;
@@ -908,12 +967,76 @@ int const TASK_PRIORITY_CHECK_THUMBNAILS = 30;
 int const TASK_PRIORITY_SCAN_PATH = 20;
 int const TASK_PRIORITY_SCAN_PATH_FINALIZE = 15;
 int const TASK_PRIORITY_BUILD_DB_INITIAL = 10;
+int const TASK_PRIORITY_LOAD_SHUFFLE_LIST = 7;
 int const TASK_PRIORITY_CALCULATE_SONG_LENGTH = 5;
 int const TASK_PRIORITY_BUILD_DB = 1;
 
 static void cancel_task( void* user_data )
     {
     free( user_data );
+    }
+
+
+typedef struct task_write_shuffle_list_t
+    {
+    music_db_t* db;
+    } task_write_shuffle_list_t;
+
+static void task_write_shuffle_list( void* user_data ) 
+    {
+    task_write_shuffle_list_t task = *(task_write_shuffle_list_t*) user_data;
+    free( user_data );
+
+    thread_mutex_lock( &task.db->mutex ); 
+    FILE* fp = fopen( "shuffle.cfg", "w" );
+    if( fp ) {
+        for( int i = 0; i < task.db->shuffle->header.count; ++i ) {
+            int index = task.db->shuffle->items[ i ];
+            if( index >= 0 && index < task.db->songs->header.count && task.db->songs->items[ index ].id != MUSICDB_INVALID_ID ) {
+                fprintf( fp, "%s\\%s\\%s\n", task.db->songs->items[ index ].artist, task.db->songs->items[ index ].album, task.db->songs->items[ index ].title );
+            }
+        }
+        fclose( fp );
+    }
+    thread_mutex_unlock( &task.db->mutex ); 
+    }
+
+
+typedef struct task_load_shuffle_list_t
+    {
+    music_db_t* db;
+    } task_load_shuffle_list_t;
+
+static void task_load_shuffle_list( void* user_data ) 
+    {
+    task_load_shuffle_list_t task = *(task_load_shuffle_list_t*) user_data;
+    free( user_data );
+
+    thread_mutex_lock( &task.db->mutex ); 
+    task.db->shuffle->header.count = 0;
+    FILE* fp = fopen( "shuffle.cfg", "r" );
+    if( fp ) {
+        while( !feof( fp ) ) 
+        {
+            char artist[ 128 ];
+            char album[ 128 ];
+            char title[ 128 ];
+            fscanf( fp, "%[^\\]\\%[^\\]\\%[^\n]\n", artist, album, title );
+            for( int i = 0; i < task.db->songs->header.count; ++i ) 
+                {
+                musicdb_song_t* song = &task.db->songs->items[ i ];
+                if( song->id != MUSICDB_INVALID_ID && strcmp( song->artist, artist ) == 0 && strcmp( song->album, album ) == 0 && strcmp( song->title, title ) == 0 ) 
+                    {
+                    musicdb_internal_ensure_shuffle_capacity( task.db );
+                    task.db->shuffle->items[ task.db->shuffle->header.count++ ] = i;
+                    break;
+                    }
+                }
+        }
+        fclose( fp );
+    }
+    thread_mutex_unlock( &task.db->mutex ); 
+    g_shuffle_list_loaded = true;
     }
 
 
@@ -2018,6 +2141,17 @@ void fix_path( char* str )
         }
     }
 
+
+bool musicdb_load_shuffle_list( music_db_t* db )
+    {
+    task_load_shuffle_list_t* task = (task_load_shuffle_list_t*) malloc( sizeof( *task ) );
+    task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_LOAD_SHUFFLE_LIST, task_load_shuffle_list, cancel_task, task );
+    return true;
+    }
+
+
+
 bool musicdb_build( music_db_t* db, char const** paths, int count )
     {
     task_build_db_t* task = (task_build_db_t*) malloc( sizeof( *task ) );
@@ -2850,6 +2984,219 @@ void musicdb_albums_release( music_db_t* db, musicdb_album_t* albums )
     free( albums );
     }
 
+
+typedef struct musicdb_shuffle_song_t
+    {
+    uint32_t song_id;
+    char title[ 128 ];
+    char album[ 128 ];
+    char artist[ 128 ];
+    int length_in_seconds;
+    int year;
+    bitmap_t* thumbnail;
+    int thumb_width;
+    int thumb_height;
+    int thumb_mip_width;
+    int thumb_mip_height;
+    } musicdb_shuffle_song_t;
+
+
+musicdb_song_t* musicdb_shuffle_get( music_db_t* db, int* songs_count, int start, int max_count )
+    {
+    thread_mutex_lock( &db->mutex );
+
+    int end = max_count > 0 ? start + max_count : db->shuffle->header.count;
+    if( end > db->shuffle->header.count ) end = db->shuffle->header.count;
+    musicdb_song_t* shuffles = (musicdb_song_t*) malloc( sizeof( musicdb_song_t ) * (end - start) );
+    memset( shuffles, 0, sizeof( musicdb_song_t ) * (end - start) );
+    int count = 0;
+    for( int i = 0; i < end - start; ++i )
+        {
+        int song_index = db->shuffle->items[ i + start ];
+        if( song_index >= 0 && song_index < db->songs->header.count ) 
+            {
+            musicdb_song_t* song = &db->songs->items[ song_index ];
+            shuffles[ count++ ] = *song;
+            }
+        }
+    *songs_count = count;
+   
+    thread_mutex_unlock( &db->mutex );   
+    return shuffles;
+    }
+
+
+void musicdb_shuffle_release( music_db_t* db, musicdb_song_t* shuffle_songs )
+    {
+    (void) db;
+    free( shuffle_songs );
+    }
+
+
+void musicdb_shuffle_add( music_db_t* db, uint32_t album_id ) 
+    {
+    thread_mutex_lock( &db->mutex );
+
+    if( (int)album_id < 0 || (int)album_id >= db->albums->header.count ) 
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+
+    musicdb_album_t* album = &db->albums->items[ album_id ];
+    if( album->id == MUSICDB_INVALID_ID )
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+ 
+    for( int i = 0; i < db->songs->header.count; ++i )
+        {
+        musicdb_song_t* song = &db->songs->items[ i ];
+        if( song->id != MUSICDB_INVALID_ID && song->album_id == album_id ) 
+            {
+            bool found = false;
+            for( int j = 0; j < db->shuffle->header.count; ++j ) 
+                {
+                if( db->shuffle->items[ j ] == i ) 
+                    {
+                    found = true;
+                    break;
+                    }
+                }
+            if( !found ) 
+                {
+                musicdb_internal_ensure_shuffle_capacity( db );
+                db->shuffle->items[ db->shuffle->header.count++ ] = i;
+                }
+            }
+        }
+   
+    thread_mutex_unlock( &db->mutex ); 
+    
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+    }
+
+
+void musicdb_shuffle_add_genre( music_db_t* db, uint32_t genre_id ) 
+    {
+    thread_mutex_lock( &db->mutex );
+
+    if( (int)genre_id < 0 || (int)genre_id >= db->genres->header.count ) 
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+
+    for( int j = 0; j < db->albums->header.count; ++j )
+        {
+        musicdb_album_t* album = &db->albums->items[ j ];
+        if( album->id == MUSICDB_INVALID_ID )
+            {
+            continue;
+            }
+                
+        bool genre = false;
+        for( int k = 0; k < album->genres_count; ++k ) 
+            {
+            if( album->genres_id[ k ] == genre_id ) 
+                {
+                genre = true;
+                break;
+                }
+            }
+ 
+        if( !genre ) continue;
+            
+        for( int i = 0; i < db->songs->header.count; ++i )
+            {
+            musicdb_song_t* song = &db->songs->items[ i ];
+            if( song->id != MUSICDB_INVALID_ID && song->album_id == album->id ) 
+                {
+                bool found = false;
+                for( int k = 0; k < db->shuffle->header.count; ++k ) 
+                    {
+                    if( db->shuffle->items[ k ] == i ) 
+                        {
+                        found = true;
+                        break;
+                        }
+                    }
+                if( !found ) 
+                    {
+                    musicdb_internal_ensure_shuffle_capacity( db );
+                    db->shuffle->items[ db->shuffle->header.count++ ] = i;
+                    }
+                }
+            }
+        }   
+    thread_mutex_unlock( &db->mutex ); 
+    
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+    }
+
+void musicdb_shuffle_remove( music_db_t* db, int index ) 
+    {
+    thread_mutex_lock( &db->mutex );
+
+    if( index < 0 || index >= db->shuffle->header.count ) 
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+    
+    --db->shuffle->header.count;
+    if( index < db->shuffle->header.count ) {
+        memmove( &db->shuffle->items[ index ], &db->shuffle->items[ index + 1 ], ( db->shuffle->header.count - index ) * sizeof( *db->shuffle->items ) );
+    }
+    thread_mutex_unlock( &db->mutex ); 
+
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+}
+
+
+void musicdb_shuffle_add_all( music_db_t* db ) 
+    {
+    thread_mutex_lock( &db->mutex );
+    db->shuffle->header.count = 0;
+    for( int i = 0; i < db->songs->header.count; ++i )
+        {
+        musicdb_song_t* song = &db->songs->items[ i ];
+        if( song->id != MUSICDB_INVALID_ID ) 
+            {
+            musicdb_internal_ensure_shuffle_capacity( db );
+            db->shuffle->items[ db->shuffle->header.count++ ] = i;
+            }
+        }
+   
+    thread_mutex_unlock( &db->mutex ); 
+    
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+    }
+
+void musicdb_shuffle_remove_all( music_db_t* db ) {
+    thread_mutex_lock( &db->mutex );
+    db->shuffle->header.count = 0;
+    thread_mutex_unlock( &db->mutex ); 
+
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+}
+
+void musicdb_shuffle_reshuffle( music_db_t* db ) {
+    thread_mutex_lock( &db->mutex );
+    shuffle_ints( db->shuffle->items, db->shuffle->header.count );  
+    thread_mutex_unlock( &db->mutex ); 
+}
 
 
 bitmap_t* musicdb_get_thumbnail( music_db_t* db, uint32_t id, int* w, int* h, int* mip_width, int* mip_height, render_t* render )

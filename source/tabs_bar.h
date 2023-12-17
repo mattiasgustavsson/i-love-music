@@ -20,6 +20,9 @@ typedef struct tabs_bar_t
     text_t* tracks_text;
     int tracks_width;
 
+    text_t* shuffle_text;
+    int shuffle_width;
+
     bitmap_t* bmp_notab_shadow;
     bitmap_t* bmp_notab_highlight;
 
@@ -56,6 +59,8 @@ typedef struct tabs_bar_t
     button_t ctl_pause;
     button_t ctl_next;
     button_t ctl_playing;
+    button_t ctl_shuffle_add;
+    button_t ctl_shuffle_remove;
 
     bitmap_t* bmp_play;
     bitmap_t* bmp_speaker_off;
@@ -149,6 +154,15 @@ tabs_bar_t* tabs_bar_create( render_t* render, play_control_t* play_control, sli
     button_size( &bar->speaker, x, y + 4, 56, 56 );
     button_modify_bounds( &bar->speaker, 6, -6, 6, 0 );
 
+    x -= 55;
+    button_init( &bar->ctl_shuffle_add, render, load_app_bitmap( render, "gui/icons/add.png", ".cache/gui/icons/add.mip", global_max_w, global_max_h ) );
+    button_size( &bar->ctl_shuffle_add, x, y + 4, 56, 56 );
+    button_modify_bounds( &bar->ctl_shuffle_add, 6, -6, 6, 0 );
+
+    button_init( &bar->ctl_shuffle_remove, render, load_app_bitmap( render, "gui/icons/remove.png", ".cache/gui/icons/remove.mip", global_max_w, global_max_h ) );
+    button_size( &bar->ctl_shuffle_remove, x, y + 4, 56, 56 );
+    button_modify_bounds( &bar->ctl_shuffle_remove, 6, -6, 6, 0 );
+
     bar->bmp_play = load_app_bitmap( render, "gui/icons/play.png", ".cache/gui/icons/play.mip", global_max_w, global_max_h ) ;
     bar->bmp_speaker_off = load_app_bitmap( render, "gui/icons/speaker_off.png", ".cache/gui/icons/speaker_off.mip", global_max_w, global_max_h ) ;
 
@@ -160,6 +174,8 @@ void tabs_bar_destroy( tabs_bar_t* bar )
     {
     bitmap_destroy( bar->render, bar->bmp_speaker_off );
     bitmap_destroy( bar->render, bar->bmp_play );
+    button_term( &bar->ctl_shuffle_remove );
+    button_term( &bar->ctl_shuffle_add );
 	button_term( &bar->ctl_playing );
 	button_term( &bar->ctl_prev );
 	button_term( &bar->ctl_pause );
@@ -193,6 +209,7 @@ void tabs_bar_destroy( tabs_bar_t* bar )
     if( bar->artists_text ) text_destroy( bar->render, bar->artists_text );
     if( bar->albums_text ) text_destroy( bar->render, bar->albums_text );
     if( bar->tracks_text ) text_destroy( bar->render, bar->tracks_text );
+    if( bar->shuffle_text ) text_destroy( bar->render, bar->shuffle_text );
     if( bar->font ) font_destroy( bar->render, bar->font );
     free( bar );
     }
@@ -206,12 +223,12 @@ typedef struct tabs_bar_navigation_t
     } tabs_bar_navigation_t;
 
 
-bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_input_t appinput, input_t const* input, bool resize, bool showing_current_album, bool supress_track_change )
+bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_input_t appinput, input_t const* input, bool resize, uint32_t album_screen_album_id, uint32_t genre_screen_genre_id, bool supress_track_change, music_db_t* musicdb )
     {
     (void) appinput;
     navigation->album_id = MUSICDB_INVALID_ID;
     navigation->hide = false;
-    bar->showing_current_album = showing_current_album;
+    bar->showing_current_album = album_screen_album_id != MUSICDB_INVALID_ID && album_screen_album_id == bar->play_control->album_id;
 
     bool redraw = false;
     if( resize )
@@ -242,6 +259,13 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         button_size( &bar->speaker, x, y + 4, 56, 56 );
         button_modify_bounds( &bar->speaker, 12, -2, -12, -2 );
 
+        x -= 55;
+        button_size( &bar->ctl_shuffle_add, x, y, 64, 64 );
+        button_modify_bounds( &bar->ctl_shuffle_add, 12, -2, -12, -2 );
+
+        button_size( &bar->ctl_shuffle_remove, x, y, 64, 64 );
+        button_modify_bounds( &bar->ctl_shuffle_remove, 12, -2, -12, -2 );
+
         button_size( &bar->power, (int)bar->render->logical_width - 52, 9, 44, 44 );        
         button_override_bounds( &bar->power, (int) bar->render->logical_width - 60, 0, 60, 60 );
 //         if( bar->search_box->text ) text_destroy( bar->render, bar->search_box->text );
@@ -249,11 +273,13 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         if( bar->artists_text ) text_destroy( bar->render, bar->artists_text );
         if( bar->albums_text ) text_destroy( bar->render, bar->albums_text );
         if( bar->tracks_text ) text_destroy( bar->render, bar->tracks_text );
+        if( bar->shuffle_text ) text_destroy( bar->render, bar->shuffle_text );
 //         bar->search_box->text = 0;
         bar->genres_text = 0;
         bar->artists_text = 0;
         bar->albums_text = 0;
         bar->tracks_text = 0;
+        bar->shuffle_text = 0;
         redraw = true;
         }
 
@@ -284,6 +310,10 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         if( input->mouse_x > x && input->mouse_x < x_next ) highlighted_tab_index = 4;
         x_next += 4;
 
+        x = x_next;
+        x_next = x + bar->shuffle_width + 18;
+        if( input->mouse_x > x && input->mouse_x < x_next ) highlighted_tab_index = 5;
+        x_next += 4;
         }
 
     if( highlighted_tab_index != bar->highlighted_tab_index )
@@ -298,6 +328,7 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         if( highlighted_tab_index == 2 ) navigation->screen = SCREEN_ARTISTS;
         if( highlighted_tab_index == 3 ) navigation->screen = SCREEN_ALBUMS;
         if( highlighted_tab_index == 4 ) navigation->screen = SCREEN_TRACKS;
+        if( highlighted_tab_index == 5 ) navigation->screen = SCREEN_SHUFFLE;
         }
 	
     bool hover_power = false;
@@ -315,6 +346,23 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         navigation->album_id = bar->play_control->album_id;
         }
 
+    redraw |= button_update( &bar->ctl_shuffle_add, input->mouse_x, input->mouse_y, &hover );
+	if( bar->active_tab_index == 4 && hover && input->click && album_screen_album_id != MUSICDB_INVALID_ID )
+        {
+        navigation->screen = SCREEN_SHUFFLE;
+        musicdb_shuffle_add( musicdb, album_screen_album_id );
+        }
+	if( bar->active_tab_index == 2 && hover && input->click && genre_screen_genre_id != MUSICDB_INVALID_ID )
+        {
+        navigation->screen = SCREEN_SHUFFLE;
+        musicdb_shuffle_add_genre( musicdb, genre_screen_genre_id );
+        }
+
+    redraw |= button_update( &bar->ctl_shuffle_remove, input->mouse_x, input->mouse_y, &hover );
+	if( bar->active_tab_index == 4 && hover && input->click )
+        {
+        navigation->screen = SCREEN_SHUFFLE;
+        }
 
     redraw |= button_update( &bar->ctl_prev, input->mouse_x, input->mouse_y, &hover );
 	if( ( hover && input->click ) || input->key_prev_track || ( !supress_track_change && input->left ) ) 
@@ -457,6 +505,12 @@ void tabs_bar_draw( tabs_bar_t* bar )
         bar->tracks_text = text_create( bar->render, bar->font, "Tracks" );   
         }
 
+    if( !bar->shuffle_text ) 
+        {
+        bar->shuffle_width = text_width( bar->render, bar->font, "Shuffle" );
+        bar->shuffle_text = text_create( bar->render, bar->font, "Shuffle" );   
+        }
+
     float bar_height = 50.0f;
     float x = 0.0f;
     float y = 10;
@@ -493,8 +547,13 @@ void tabs_bar_draw( tabs_bar_t* bar )
     ++i;
 
     // Tracks
-    bool rightval = rightmost;
     x += tabs_internal_draw( bar, x, y, bar_height, bar->tracks_text, bar->tracks_width, i == bar->highlighted_tab_index,
+        tabs_active[ i ], tabs_active[ i - 1 ], tabs_active[ i + 1 ], not_leftmost, not_rightmost );
+    ++i;
+
+    // Tracks
+    bool rightval = rightmost;
+    x += tabs_internal_draw( bar, x, y, bar_height, bar->shuffle_text, bar->shuffle_width, i == bar->highlighted_tab_index,
         tabs_active[ i ], tabs_active[ i - 1 ], tabs_active[ i + 1 ], not_leftmost, rightval );
     ++i;
 
@@ -509,9 +568,13 @@ void tabs_bar_draw( tabs_bar_t* bar )
     slider_draw( &bar->volume, text_col, text_col_highlighted );
 
     if( bar->play_control->album_id != MUSICDB_INVALID_ID && !bar->showing_current_album )
-        button_draw( &bar->ctl_playing, text_col, text_col_highlighted );   
+        button_draw( &bar->ctl_playing, text_col, text_col_highlighted );
     button_draw( &bar->ctl_prev, text_col, text_col_highlighted );   
     button_draw( &bar->ctl_pause, text_col, text_col_highlighted );
     button_draw( &bar->ctl_next, text_col, text_col_highlighted );
+    if( bar->active_tab_index == 4 ||bar->active_tab_index == 2 ) {
+        button_draw( &bar->ctl_shuffle_add, text_col, text_col_highlighted );
+        //button_draw( &bar->ctl_shuffle_remove, text_col, text_col_highlighted );
+    }
     }
 
