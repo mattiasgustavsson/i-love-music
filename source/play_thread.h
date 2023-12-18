@@ -24,6 +24,14 @@ void swapstr( char* a, char* b )
     }
 
 
+void swapflt( float* a, float* b )
+    {
+    float t = *a;
+    *a = *b;
+    *b = t;
+    }
+
+
 typedef struct play_thread_t
     {
     thread_mutex_t mutex;
@@ -43,11 +51,14 @@ typedef struct play_thread_t
     int rewind_speed;
 
     char next_song[ 256 ];
+    float next_song_gain;
     char current_song[ 256 ];
+    float current_song_gain;
 
     char buffered_next_song[ 256 ];
+    float buffered_next_song_gain;
     char buffered_current_song[ 256 ];
-
+    float buffered_current_song_gain;
 
     bool set_position_activated;
     float set_position;
@@ -59,10 +70,12 @@ typedef struct play_thread_t
     int sample_pairs_count;
     int sample_pairs_capacity;
     int position;
+    float track_gain;
 
     APP_S16* next_song_sample_pairs;
     int next_song_sample_pairs_count;
     int next_song_sample_pairs_capacity;
+    float next_song_track_gain;
     } play_thread_t;
 
 
@@ -85,8 +98,8 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                 int j = 0;
                 for( int i = 0; i < count; i += play->ffwd_speed, ++j )
                     {
-                    sample_pairs[ j * 2 + 0 ] = play->sample_pairs[ play->position * 2 + i * 2 + 0 ] / 4;
-                    sample_pairs[ j * 2 + 1 ] = play->sample_pairs[ play->position * 2 + i * 2 + 1 ] / 4;
+                    sample_pairs[ j * 2 + 0 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] / 4 ) * play->track_gain );
+                    sample_pairs[ j * 2 + 1 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] / 4 ) * play->track_gain );
                     }
                 sample_pairs += count * 2;
                 sample_pairs_count -= ( count + ( play->ffwd_speed - 1 ) ) / play->ffwd_speed;
@@ -107,8 +120,8 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                 int j = 0;
                 for( int i = 0; i < count; i += play->rewind_speed, ++j )
                     {
-                    sample_pairs[ j * 2 + 0 ] = play->sample_pairs[ play->position * 2 - i * 2 + 0 ] / 4;
-                    sample_pairs[ j * 2 + 1 ] = play->sample_pairs[ play->position * 2 - i * 2 + 1 ] / 4;
+                    sample_pairs[ j * 2 + 0 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 - i * 2 + 0 ] / 4 ) * play->track_gain );
+                    sample_pairs[ j * 2 + 1 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 - i * 2 + 1 ] / 4 ) * play->track_gain );
                     }
                 sample_pairs += count * 2;
                 sample_pairs_count -= ( count + ( play->rewind_speed - 1 ) ) / play->rewind_speed;
@@ -130,8 +143,8 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                 if( count > sample_pairs_count ) count = sample_pairs_count;
                 for( int i = 0; i < count; ++i )
                     {
-                    sample_pairs[ i * 2 + 0 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] * mute_level ) / mute_max );
-                    sample_pairs[ i * 2 + 1 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] * mute_level ) / mute_max );
+                    sample_pairs[ i * 2 + 0 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] * mute_level ) / mute_max ) * play->track_gain ) ;
+                    sample_pairs[ i * 2 + 1 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] * mute_level ) / mute_max ) * play->track_gain ) ;
                     --mute_level;
                     }
                 sample_pairs += count * 2;
@@ -141,9 +154,11 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                     {
                     play->position = 0;          
                     swapstr( play->buffered_current_song, play->buffered_next_song );
+                    swapflt( &play->buffered_current_song_gain, &play->buffered_next_song_gain );
                     swapptr( &play->sample_pairs, &play->next_song_sample_pairs );
                     swapint( &play->sample_pairs_capacity, &play->next_song_sample_pairs_capacity );
                     swapint( &play->sample_pairs_count, &play->next_song_sample_pairs_count );
+                    swapflt( &play->track_gain, &play->next_song_track_gain );
                     play->song_finished = true;
                     }
                 }   
@@ -158,8 +173,8 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                 if( count > sample_pairs_count ) count = sample_pairs_count;
                 for( int i = 0; i < count; ++i )
                     {
-                    sample_pairs[ i * 2 + 0 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] * mute_level ) / mute_max );
-                    sample_pairs[ i * 2 + 1 ] = (APP_S16)( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] * mute_level ) / mute_max );
+                    sample_pairs[ i * 2 + 0 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] * mute_level ) / mute_max ) * play->track_gain ) ;
+                    sample_pairs[ i * 2 + 1 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] * mute_level ) / mute_max ) * play->track_gain ) ;
                     ++mute_level;
                     }
                 sample_pairs += count * 2;
@@ -169,9 +184,11 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                     {
                     play->position = 0;          
                     swapstr( play->buffered_current_song, play->buffered_next_song );
+                    swapflt( &play->buffered_current_song_gain, &play->buffered_next_song_gain );
                     swapptr( &play->sample_pairs, &play->next_song_sample_pairs );
                     swapint( &play->sample_pairs_capacity, &play->next_song_sample_pairs_capacity );
                     swapint( &play->sample_pairs_count, &play->next_song_sample_pairs_count );
+                    swapflt( &play->track_gain, &play->next_song_track_gain );
                     play->song_finished = true;
                     }
                 }   
@@ -182,7 +199,11 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                 {
                 int count = play->sample_pairs_count - play->position;
                 if( count > sample_pairs_count ) count = sample_pairs_count;
-                memcpy( sample_pairs, play->sample_pairs + play->position * 2, count * 2 * sizeof( APP_S16 ) );
+                for( int i = 0; i < count; ++i )
+                    {
+                    sample_pairs[ i * 2 + 0 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 0 ] ) ) * play->track_gain );
+                    sample_pairs[ i * 2 + 1 ] = (APP_S16)( ( ( play->sample_pairs[ play->position * 2 + i * 2 + 1 ] ) ) * play->track_gain );
+                    }
                 sample_pairs += count * 2;
                 sample_pairs_count -= count;
                 play->position += count;        
@@ -192,10 +213,12 @@ void sound_proc( APP_S16* sample_pairs, int sample_pairs_count, void* user_data 
                     if( !play->loop ) 
                         {
                         swapstr( play->buffered_current_song, play->buffered_next_song );
+                        swapflt( &play->buffered_current_song_gain, &play->buffered_next_song_gain );
                         swapstr( play->current_song, play->next_song );
                         swapptr( &play->sample_pairs, &play->next_song_sample_pairs );
                         swapint( &play->sample_pairs_capacity, &play->next_song_sample_pairs_capacity );
                         swapint( &play->sample_pairs_count, &play->next_song_sample_pairs_count );
+                        swapflt( &play->track_gain, &play->next_song_track_gain );
                         play->song_finished = true;
                         }
                     }
@@ -248,6 +271,7 @@ int play_thread_proc( void* user_data )
             {
             play->resume_after_decode = true;
             strcpy( play->buffered_current_song, play->current_song );
+            play->buffered_current_song_gain = play->current_song_gain;
             new_current = true;
             }           
         thread_mutex_unlock( &play->mutex );
@@ -261,6 +285,8 @@ int play_thread_proc( void* user_data )
                 mmap_t* file = mmap_open_read_only( play->buffered_current_song, s.st_size );
                 if( file )
                     {
+                    play->track_gain = play->buffered_current_song_gain;
+
                     ma_resampler* rateconv = NULL;
 
                     mp3dec_t dec;
@@ -433,6 +459,7 @@ int play_thread_proc( void* user_data )
         if( stricmp( play->buffered_next_song, play->next_song ) != 0 ) 
             {
             strcpy( play->buffered_next_song, play->next_song );
+            play->buffered_next_song_gain = play->next_song_gain;
             new_next = true;
             }
         thread_mutex_unlock( &play->mutex );
@@ -446,6 +473,8 @@ int play_thread_proc( void* user_data )
                 mmap_t* file = mmap_open_read_only( play->buffered_next_song, s.st_size );
                 if( file )
                     {
+                    play->next_song_track_gain = play->buffered_next_song_gain;
+
                     ma_resampler* rateconv = NULL;
                     mp3dec_t dec;
                     mp3dec_init( &dec );
@@ -651,7 +680,7 @@ void play_thread_rewind( play_thread_t* play, bool is_rewind )
     }
 
 
-void play_thread_change_song( play_thread_t* play, char const* song, char const* next_song, float position )
+void play_thread_change_song( play_thread_t* play, char const* song, float song_gain, char const* next_song, float next_song_gain, float position )
     {
     thread_mutex_lock( &play->samples_mutex );
     play->is_paused = true;
@@ -660,7 +689,9 @@ void play_thread_change_song( play_thread_t* play, char const* song, char const*
     thread_mutex_lock( &play->mutex );
 
     strcpy( play->current_song, song );
+    play->current_song_gain = song_gain;
     strcpy( play->next_song, next_song ? next_song : "" );
+    play->next_song_gain = next_song_gain;
     play->set_position = position;
     play->song_finished = false;
 
@@ -680,11 +711,12 @@ bool play_thread_song_finished( play_thread_t* play )
     }
 
 
-bool play_thread_queue_song( play_thread_t* play, char const* next_song )
+bool play_thread_queue_song( play_thread_t* play, char const* next_song, float next_song_gain )
     {
     thread_mutex_lock( &play->mutex );
 
     strcpy( play->next_song, next_song );
+    play->next_song_gain = next_song_gain;
     play->song_finished = false;
 
     thread_signal_raise( &play->signal );

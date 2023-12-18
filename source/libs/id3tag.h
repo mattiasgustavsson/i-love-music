@@ -53,6 +53,8 @@ typedef struct id3tag_t
     char const* discs;
     char const* compilation;
     int track_length;
+    float replaygain_track_gain;
+    float replaygain_album_gain;
 
     int play_counter;
 
@@ -79,6 +81,8 @@ typedef struct id3tag_t
 #define ID3TAG_FIELD_PLAY_COUNTER ( 1U << 15U )
 #define ID3TAG_FIELD_PICS ( 1U << 16U )
 #define ID3TAG_FIELD_TRACK_LENGTH ( 1U << 17U )
+#define ID3TAG_FIELD_REPLAYGAIN_TRACK_GAIN ( 1U << 18U )
+#define ID3TAG_FIELD_REPLAYGAIN_ALBUM_GAIN ( 1U << 19U )
 
 size_t id3tag_size( void const* first_ten_bytes );
 
@@ -390,6 +394,8 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
         FIELD_COMPILATION,
         FIELD_PLAY_COUNTER,
         FIELD_TRACK_LENGTH,
+        FIELD_REPLAYGAIN_TRACK_GAIN,
+        FIELD_REPLAYGAIN_ALBUM_GAIN,
 
         FIELDCOUNT,
         };
@@ -413,6 +419,8 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
     if( fields & ID3TAG_FIELD_COMPILATION ) ++fields_requested;
     if( fields & ID3TAG_FIELD_PLAY_COUNTER ) ++fields_requested;
     if( fields & ID3TAG_FIELD_TRACK_LENGTH ) ++fields_requested;
+    if( fields & ID3TAG_FIELD_REPLAYGAIN_TRACK_GAIN ) ++fields_requested;
+    if( fields & ID3TAG_FIELD_REPLAYGAIN_ALBUM_GAIN ) ++fields_requested;
 
     ID3TAG_U8* ptr = (ID3TAG_U8*) data;
 
@@ -538,6 +546,48 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
             if( tag->tag.track_length == 0 ) tag->tag.track_length = atoi( str );
             ID3TAG_FREE( memctx, str );
             if( tag->tag.track_length > 0 ) fields_found[ FIELD_TRACK_LENGTH ] = true;
+            }
+
+        if( ( fields & ID3TAG_FIELD_REPLAYGAIN_TRACK_GAIN ) && strcmp( frame_id , "TXXX" ) == 0 )
+            {
+            int bytes_consumed = 0;
+            char* description = id3tag_internal_get_string( *ptr, ptr + 1, frame_size - 1, memctx, &bytes_consumed );
+            if( description, "REPLAYGAIN_TRACK_GAIN" ) {
+                char* value = id3tag_internal_get_string( *ptr, ptr + 1 + bytes_consumed, frame_size - 1 - bytes_consumed, memctx, NULL );
+                if( tag->tag.replaygain_track_gain == 0.0f ) 
+                    {
+                    char* db = strstr( value, " dB" );
+                    if( db ) 
+                        {
+                        *db = 0;
+                        tag->tag.replaygain_track_gain = atof( value );
+                        }
+                    }
+                ID3TAG_FREE( memctx, value );
+                fields_found[ FIELD_REPLAYGAIN_TRACK_GAIN ] = true;
+            }
+            ID3TAG_FREE( memctx, description );
+            }
+
+        if( ( fields & ID3TAG_FIELD_REPLAYGAIN_ALBUM_GAIN ) && strcmp( frame_id , "TXXX" ) == 0 )
+            {
+            int bytes_consumed = 0;
+            char* description = id3tag_internal_get_string( *ptr, ptr + 1, frame_size - 1, memctx, &bytes_consumed );
+            if( description, "REPLAYGAIN_ALBUM_GAIN" ) {
+                char* value = id3tag_internal_get_string( *ptr, ptr + 1 + bytes_consumed, frame_size - 1 - bytes_consumed, memctx, NULL );
+                if( tag->tag.replaygain_album_gain == 0.0f ) 
+                    {
+                    char* db = strstr( value, " dB" );
+                    if( db ) 
+                        {
+                        *db = 0;
+                        tag->tag.replaygain_album_gain = atof( value );
+                        }
+                    }
+                ID3TAG_FREE( memctx, value );
+                fields_found[ FIELD_REPLAYGAIN_ALBUM_GAIN ] = true;
+            }
+            ID3TAG_FREE( memctx, description );
             }
 
         if( ( ( fields & ID3TAG_FIELD_TRACK ) || ( fields & ID3TAG_FIELD_TRACKS ) ) && 

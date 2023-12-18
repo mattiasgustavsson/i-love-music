@@ -350,7 +350,7 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
 	if( bar->active_tab_index == 4 && hover && input->click && album_screen_album_id != MUSICDB_INVALID_ID )
         {
         navigation->screen = SCREEN_SHUFFLE;
-        musicdb_shuffle_add( musicdb, album_screen_album_id );
+        musicdb_shuffle_add_album( musicdb, album_screen_album_id );
         }
 	if( bar->active_tab_index == 2 && hover && input->click && genre_screen_genre_id != MUSICDB_INVALID_ID )
         {

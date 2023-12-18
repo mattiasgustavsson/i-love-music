@@ -2,7 +2,7 @@
     #define MUSICDB_THUMBNAIL_FILES
 #endif 
 
-static int MUSICDB_VERSION = 2;
+static int MUSICDB_VERSION = 3;
 
 #define MUSICDB_HEADER_ID_SIZE 32
 static char const musicdb_genres_header_id[ MUSICDB_HEADER_ID_SIZE ] =  "ilm_db_genres";
@@ -113,6 +113,8 @@ typedef struct musicdb_song_t
     int track_number;
     int year;
     bool compilation;
+    float track_gain;
+    float album_gain;
 
     char filename[ 256 ];
     size_t filesize;
@@ -1623,7 +1625,8 @@ static void task_add_song( void* user_data )
     id3tag_t* tag = id3tag_load( mmap_data( mmap ), size, 
         ID3TAG_FIELD_TITLE | ID3TAG_FIELD_ARTIST | ID3TAG_FIELD_ALBUM_ARTIST | ID3TAG_FIELD_SORT_ALBUM_ARTIST | 
         ID3TAG_FIELD_SORT_ARTIST | ID3TAG_FIELD_ALBUM | ID3TAG_FIELD_GENRE | ID3TAG_FIELD_YEAR | 
-        ID3TAG_FIELD_TRACK | ID3TAG_FIELD_DISC | ID3TAG_FIELD_COMPILATION | ID3TAG_FIELD_TRACK_LENGTH 
+        ID3TAG_FIELD_TRACK | ID3TAG_FIELD_DISC | ID3TAG_FIELD_COMPILATION | ID3TAG_FIELD_TRACK_LENGTH |
+        ID3TAG_FIELD_REPLAYGAIN_TRACK_GAIN | ID3TAG_FIELD_REPLAYGAIN_ALBUM_GAIN
         , 0 );
     
     id3tag_t* tagv1 = id3tag_load_id3v1( (void*)( ( (uintptr_t) mmap_data( mmap ) ) + mp3size - 128 ), 128, 0 );
@@ -1639,6 +1642,8 @@ static void task_add_song( void* user_data )
     int track = 0;
     int disc = 0;
     int length_in_seconds = 0;
+    float replaygain_track_gain = 1.0f;
+    float replaygain_album_gain = 1.0f;
 
     if( tag )
         {
@@ -1653,6 +1658,10 @@ static void task_add_song( void* user_data )
         if( tag->track ) track = atoi( tag->track );
         if( tag->disc ) disc = atoi( tag->disc );
         if( tag->track_length ) length_in_seconds = ( tag->track_length + 999 ) / 1000;
+        if( tag->replaygain_track_gain ) 
+            replaygain_track_gain = powf( 10.0f, tag->replaygain_track_gain / 20.0f );
+        if( tag->replaygain_album_gain ) 
+            replaygain_album_gain = powf( 10.0f, tag->replaygain_album_gain / 20.0f );
         }
 
     if( tagv1 )
@@ -1758,6 +1767,8 @@ static void task_add_song( void* user_data )
     song->track_number = track;
     song->year = year;
     song->compilation = tag && tag->compilation ? atoi( tag->compilation ) != 0 : false;
+    song->track_gain = replaygain_track_gain;
+    song->album_gain = replaygain_album_gain;
 
     MUSICDB_INTERNAL_STRNCPY( song->filename, task.file );
     song->filesize = file_size( song->filename );
@@ -3033,7 +3044,7 @@ void musicdb_shuffle_release( music_db_t* db, musicdb_song_t* shuffle_songs )
     }
 
 
-void musicdb_shuffle_add( music_db_t* db, uint32_t album_id ) 
+void musicdb_shuffle_add_album( music_db_t* db, uint32_t album_id ) 
     {
     thread_mutex_lock( &db->mutex );
 
@@ -3113,7 +3124,7 @@ void musicdb_shuffle_add_genre( music_db_t* db, uint32_t genre_id )
         for( int i = 0; i < db->songs->header.count; ++i )
             {
             musicdb_song_t* song = &db->songs->items[ i ];
-            if( song->id != MUSICDB_INVALID_ID && song->album_id == album->id ) 
+            if( song->id != MUSICDB_INVALID_ID && song->album_id == album->id && ( song->length_in_seconds == 0 || song->length_in_seconds > 90 ) && song->track_gain != 1.0f ) 
                 {
                 bool found = false;
                 for( int k = 0; k < db->shuffle->header.count; ++k ) 
@@ -3168,7 +3179,7 @@ void musicdb_shuffle_add_all( music_db_t* db )
     for( int i = 0; i < db->songs->header.count; ++i )
         {
         musicdb_song_t* song = &db->songs->items[ i ];
-        if( song->id != MUSICDB_INVALID_ID ) 
+        if( song->id != MUSICDB_INVALID_ID && ( song->length_in_seconds == 0 || song->length_in_seconds > 90 ) && song->track_gain != 1.0f ) 
             {
             musicdb_internal_ensure_shuffle_capacity( db );
             db->shuffle->items[ db->shuffle->header.count++ ] = i;
