@@ -1007,6 +1007,7 @@ int app_proc( app_t* app, void* user_data )
         tabs_nav.screen = screen;
         redraw |= tabs_bar_update( tabs_bar, &tabs_nav, appinput, &input, resize, 
             screen == SCREEN_TRACKS ? screen_tracks.album_id : MUSICDB_INVALID_ID, 
+            screen == SCREEN_ALBUMS ? screen_albums.current_artist_id : MUSICDB_INVALID_ID, 
             screen == SCREEN_ARTISTS ? screen_artists.current_genre_id : MUSICDB_INVALID_ID,
             screen == SCREEN_TRACKS && screen_tracks.big_pic, &musicdb );
         if( tabs_nav.hide ) 

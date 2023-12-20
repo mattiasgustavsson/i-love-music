@@ -1658,10 +1658,8 @@ static void task_add_song( void* user_data )
         if( tag->track ) track = atoi( tag->track );
         if( tag->disc ) disc = atoi( tag->disc );
         if( tag->track_length ) length_in_seconds = ( tag->track_length + 999 ) / 1000;
-        if( tag->replaygain_track_gain ) 
-            replaygain_track_gain = powf( 10.0f, tag->replaygain_track_gain / 20.0f );
-        if( tag->replaygain_album_gain ) 
-            replaygain_album_gain = powf( 10.0f, tag->replaygain_album_gain / 20.0f );
+        if( tag->replaygain_track_gain ) replaygain_track_gain = powf( 10.0f, tag->replaygain_track_gain / 20.0f );
+        if( tag->replaygain_album_gain ) replaygain_album_gain = powf( 10.0f, tag->replaygain_album_gain / 20.0f );
         }
 
     if( tagv1 )
@@ -3079,6 +3077,58 @@ void musicdb_shuffle_add_album( music_db_t* db, uint32_t album_id )
                 {
                 musicdb_internal_ensure_shuffle_capacity( db );
                 db->shuffle->items[ db->shuffle->header.count++ ] = i;
+                }
+            }
+        }
+   
+    thread_mutex_unlock( &db->mutex ); 
+    
+    task_write_shuffle_list_t* write_task = (task_write_shuffle_list_t*) malloc( sizeof( *write_task ) );
+    write_task->db = db;
+    background_tasks_add( db->background_tasks, TASK_PRIORITY_WRITE_SHUFFLE_LIST, task_write_shuffle_list, cancel_task, write_task );
+    }
+
+
+void musicdb_shuffle_add_artist( music_db_t* db, uint32_t artist_id ) 
+    {
+    thread_mutex_lock( &db->mutex );
+
+    if( (int)artist_id < 0 || (int)artist_id >= db->artists->header.count ) 
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+
+    musicdb_artist_t* artist = &db->artists->items[ artist_id ];
+    if( artist->id == MUSICDB_INVALID_ID )
+        {
+        thread_mutex_unlock( &db->mutex );
+        return;
+        }
+ 
+    for( int i = 0; i < db->songs->header.count; ++i )
+        {
+        musicdb_song_t* song = &db->songs->items[ i ];
+        if( song->id != MUSICDB_INVALID_ID && (int)song->album_id >= 0 && (int)song->album_id < db->albums->header.count 
+          && ( song->length_in_seconds == 0 || song->length_in_seconds > 90 ) && song->track_gain != 1.0f ) 
+            {
+            musicdb_album_t* album = &db->albums->items[ (int)song->album_id ];
+            if( album->id != MUSICDB_INVALID_ID && album->artist_id == artist_id ) 
+                {
+                bool found = false;
+                for( int j = 0; j < db->shuffle->header.count; ++j ) 
+                    {
+                    if( db->shuffle->items[ j ] == i ) 
+                        {
+                        found = true;
+                        break;
+                        }
+                    }
+                if( !found ) 
+                    {
+                    musicdb_internal_ensure_shuffle_capacity( db );
+                    db->shuffle->items[ db->shuffle->header.count++ ] = i;
+                    }
                 }
             }
         }

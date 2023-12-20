@@ -223,7 +223,7 @@ typedef struct tabs_bar_navigation_t
     } tabs_bar_navigation_t;
 
 
-bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_input_t appinput, input_t const* input, bool resize, uint32_t album_screen_album_id, uint32_t genre_screen_genre_id, bool supress_track_change, music_db_t* musicdb )
+bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_input_t appinput, input_t const* input, bool resize, uint32_t album_screen_album_id, uint32_t genre_screen_artist_id, uint32_t genre_screen_genre_id, bool supress_track_change, music_db_t* musicdb )
     {
     (void) appinput;
     navigation->album_id = MUSICDB_INVALID_ID;
@@ -351,6 +351,11 @@ bool tabs_bar_update( tabs_bar_t* bar, tabs_bar_navigation_t* navigation, app_in
         {
         navigation->screen = SCREEN_SHUFFLE;
         musicdb_shuffle_add_album( musicdb, album_screen_album_id );
+        }
+	if( bar->active_tab_index == 3 && hover && input->click && genre_screen_artist_id != MUSICDB_INVALID_ID )
+        {
+        navigation->screen = SCREEN_SHUFFLE;
+        musicdb_shuffle_add_artist( musicdb, genre_screen_artist_id );
         }
 	if( bar->active_tab_index == 2 && hover && input->click && genre_screen_genre_id != MUSICDB_INVALID_ID )
         {
@@ -572,9 +577,10 @@ void tabs_bar_draw( tabs_bar_t* bar )
     button_draw( &bar->ctl_prev, text_col, text_col_highlighted );   
     button_draw( &bar->ctl_pause, text_col, text_col_highlighted );
     button_draw( &bar->ctl_next, text_col, text_col_highlighted );
-    if( bar->active_tab_index == 4 ||bar->active_tab_index == 2 ) {
+    if( bar->active_tab_index == 4 || bar->active_tab_index == 3 || bar->active_tab_index == 2 ) 
+        {
         button_draw( &bar->ctl_shuffle_add, text_col, text_col_highlighted );
         //button_draw( &bar->ctl_shuffle_remove, text_col, text_col_highlighted );
-    }
+        }
     }
 

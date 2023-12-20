@@ -552,7 +552,7 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
             {
             int bytes_consumed = 0;
             char* description = id3tag_internal_get_string( *ptr, ptr + 1, frame_size - 1, memctx, &bytes_consumed );
-            if( description, "REPLAYGAIN_TRACK_GAIN" ) {
+            if( strcmp( description, "REPLAYGAIN_TRACK_GAIN" ) == 0 ) {
                 char* value = id3tag_internal_get_string( *ptr, ptr + 1 + bytes_consumed, frame_size - 1 - bytes_consumed, memctx, NULL );
                 if( tag->tag.replaygain_track_gain == 0.0f ) 
                     {
@@ -560,7 +560,7 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
                     if( db ) 
                         {
                         *db = 0;
-                        tag->tag.replaygain_track_gain = atof( value );
+                        tag->tag.replaygain_track_gain = (float) atof( value );
                         }
                     }
                 ID3TAG_FREE( memctx, value );
@@ -573,7 +573,7 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
             {
             int bytes_consumed = 0;
             char* description = id3tag_internal_get_string( *ptr, ptr + 1, frame_size - 1, memctx, &bytes_consumed );
-            if( description, "REPLAYGAIN_ALBUM_GAIN" ) {
+            if( strcmp( description, "REPLAYGAIN_ALBUM_GAIN" ) == 0 ) {
                 char* value = id3tag_internal_get_string( *ptr, ptr + 1 + bytes_consumed, frame_size - 1 - bytes_consumed, memctx, NULL );
                 if( tag->tag.replaygain_album_gain == 0.0f ) 
                     {
@@ -581,7 +581,7 @@ id3tag_t* id3tag_load( void const* data, size_t size, ID3TAG_U32 fields, void* m
                     if( db ) 
                         {
                         *db = 0;
-                        tag->tag.replaygain_album_gain = atof( value );
+                        tag->tag.replaygain_album_gain = (float) atof( value );
                         }
                     }
                 ID3TAG_FREE( memctx, value );
